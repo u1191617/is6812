@@ -1,1 +1,1 @@
-Here are my contributions to our Kaggle project throughout the semester
+A key part of your portfolio will be your repo's README page. The README should briefly and concisely summarize the project and communicate the business value of your results. It is an elevator pitch for your project-related work.  Make sure to include the talking points you would want to discuss in an in-depth job interview.
