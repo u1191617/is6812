@@ -1,0 +1,255 @@
+---
+title: "EDA Assignment"
+author: "Hunter Nilsen"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: yes
+    highlight: espresso
+---
+
+```{r setup, include=FALSE}
+# Code chunks revealed
+# Warnings and lengthy output suppressed
+knitr::opts_chunk$set(echo = TRUE, message= F, warning = F)
+```
+
+## Home Credit Business Problem
+
+Home Credit's objective is to make loans more attainable for the unbanked population. However, they run into the analytical problem of misidentifying whether or not a client is capable of repayment. By mistakenly refusing client's who actually would be able to repay, they are going against their business objective. By mistakenly accepting client's who can't repay, they lose money. The goal of this process is to improve Home Credit's ability to determine who will default and who will be able to repay so that they can bring loans to as much of their target population as possible.
+
+## EDA Purpose 
+
+The purpose of this project is to gain a better understanding of the Home Credit data and prepare the data for when we want to determine and improve predictability of which client's will and won't default on their payments. By exploring the data and finding correlations and problems, we can improve our position for when we implement more complex models to fulfill our analytical problem.
+
+## Questions to Guide the EDA Process
+
+-   What variables are categorical and what variables are numeric?
+-   What is the distribution of default to non-default?
+-   What would be the accuracy of a majority class classifier model be?
+-   What variables have a correlation with the target variable "default"?
+-   How could missing values be affecting the data?
+-   How could outliers (mistakes/actual outliers) be affecting the data?
+-   Do other datasets have a correlations with the target variable "default"?
+
+## EDA Preparation
+
+The "application_train" data provided for the project consists of 122 columns of data with over 300,000 entries. Two of these columns are the ID: "SK_ID_CURR" and whether or not they defaulted: "TARGET". Upon first glance, many columns have missing variables that will have to be addressed as well as many columns are categorical and should be factored. The "application_test" set will come into play when we are testing our predictive models as the "TARGET" variable is not in it and won't be of much use during EDA itself. We do want the test data to be changed the same as the train data so it is an accurate test set.
+
+```{r}
+# Import libraries
+library(tidyverse)
+library(dplyr)
+library(skimr)
+library(janitor)
+
+# Import data
+train <- read.csv("application_train.csv")
+test <- read.csv("application_test.csv")
+
+# Factor categorical variables for train
+train <- train %>%
+  mutate(across(where(is.character), as.factor))
+
+# Factor binary variables for train
+train <- train %>%
+  mutate_if(function(x) all(x %in% c(0, 1)), as.factor)
+
+# Check train data
+str(train)
+
+# Factor categorical variables
+test <- test %>%
+  mutate(across(where(is.character), as.factor))
+
+# Factor binary variables
+test <- test %>%
+  mutate_if(function(x) all(x %in% c(0, 1)), as.factor)
+
+# Check data
+str(test)
+```
+
+
+## Exploring the Target Variable
+
+```{r}
+# Information on the Target Variable
+str(train$TARGET)
+summary(train$TARGET)
+
+# Creating a Visualization of the Target Variable
+ggplot(train, aes(x = TARGET)) +
+  geom_bar() +
+  labs(title = "Target Variable Distribution")
+```
+
+In this visualization we can that there are many more people who don't default than those that do. This is expected, but we want to dive deeper to learn what is connecting the people who are defaulting and those who aren't.
+
+```{r}
+# Determine if target is unbalanced
+table(train$TARGET)
+
+# Assign majority class and minority class numbers
+major <- 282686
+minor <- 24825
+
+# Determine accuracy for majority class classifier
+majorityclassaccuracy <- major / (major + minor)
+majorityclassaccuracy
+```
+
+There are 282,686 accounts that did not default and 24,825 that did. If a model were to use just the majority class classifier, it would be right 91.9% of the time as that is the ratio of non-default to default values. That will become our baseline as we implement more complex models to beat.
+
+## Exploring Relationship between Target and Predictors
+
+Next, we want to explore some relationships between the target variable and some predictors. Three predictors that I thought may have an impact on default are income, education, and family status.
+
+```{r}
+# Income vs Default
+ggplot(train, aes(x = AMT_INCOME_TOTAL, y = TARGET)) + 
+  geom_boxplot() +
+  labs(title = "Income vs Risk of Default")
+
+# Education vs Default
+ggplot(train, aes(x = NAME_EDUCATION_TYPE, fill = TARGET)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Education vs Risk of Default")
+
+# Family Status vs Default
+ggplot(train, aes(x = NAME_FAMILY_STATUS, fill = TARGET)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Family Status vs Risk of Default")
+```
+
+From the first boxplot it appears that more accounts that defaulted consisted of higher income clients. We also have an outlier in the non-default category. This client is making almost 1.2 million per year which is definitely possible so while it likely isn't a mistake in the data, it is still an outlier. We will revisit this later.
+
+In the next bar chart, we can see that the education type with the fewest defaulted accounts is those with an academic degree. Whether this is dependent on income or other variables, an academic degree has a smaller chance of defaulting.
+
+The third chart shows us family status' impact on default and there is no real conclusive data from this graph.
+
+
+# Examing Data Integrity
+
+Before we revisit our boxplot, we are going to remove that outlier as it doesn't provide us with much information, but rather skews the data. We are also going to remove another data point that appears to be a mistake in the DAYS_EMPLOYED column.
+
+```{r}
+# Remove outliers
+train <- train %>%
+  filter(AMT_INCOME_TOTAL <= 500000,
+         DAYS_EMPLOYED <= 30000)
+```
+
+To dive deeper into what the first boxplot showed us, let's take a look and see if average income is different between the groups that defaulted and the group that didn't.
+
+```{r}
+# Average income vs risk of default
+train %>%
+  group_by(TARGET) %>%
+  summarise(avg_income = mean(AMT_INCOME_TOTAL, na.rm = TRUE))
+
+# Income vs default pt.2
+ggplot(train, aes(x = AMT_INCOME_TOTAL, y = TARGET)) + 
+  geom_boxplot() +
+  labs(title = "Income vs Risk of Default")
+```
+
+Upon removing the outlier we can see that the average income for those that defaulted on their payments is slightly lower, but it is not low enough to signify income as a significant cause without a more complex model. 
+
+By re-running the boxplot without that outlier, we can now see that the two income plots are very similar.
+
+
+## Exploring the Scope of Missing Data
+
+Next, we will want to remove or replace missing data points that could be impacting our results. First we will see which columns are missing values and how much.
+
+```{r}
+# Using Skimr
+skim_summary <- skim(train)
+skim_summary
+dim(train)
+```
+
+First we will remove the columns missing more than 50% as they will not be a good indicator of the 300,000 entries.
+
+```{r}
+# Removing NA's with more than 10% of their values missing
+threshold <- 0.1
+
+# % of missing values in each column
+missing <- colSums(is.na(train)) / nrow(train)
+
+# Select columns with missing values below the threshold
+columns <- names(missing[missing <= threshold])
+
+# Keep only selected columns
+train_clean <- train %>%
+  select(all_of(columns))
+
+dim(train_clean)
+```
+
+We can see that the number of columns went from 122 to 77. Over 40 columns were missing more than 40% of their data. 
+
+With the remaining columns, we will input the mean values of the entire column to make those columns still usable in our analysis.
+
+```{r}
+# Replacing Remaining NA's with Mean Values
+train_clean <- train_clean %>%
+  mutate(across(everything(), ~ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+# Make sure the NA's Removed
+skim(train_clean)
+```
+
+We can now see that the missing data has been resolved.
+
+## Checking for Variance
+
+Lastly, we are going to check for columns with near-zero or zero variance.
+
+```{r}
+# Threshold for "near-zero" or "zero" variance
+threshold <- 0.01
+
+# Variance for each column
+variance <- apply(train_clean, 2, var)
+
+# Columns with variance below the threshold
+low_variance <- names(variance[variance < threshold])
+
+# Remove NAs from low variance columns
+low_variance <- low_variance[!is.na(low_variance)]
+
+# Remove low variance columns
+if (length(low_variance) > 0) {
+  high_variance <- train_clean %>%
+    select(-all_of(low_variance))
+  
+  # Dimensions of the data after removing low variance columns
+  dim(high_variance)
+} else {
+  # Use the original data
+  high_variance <- train_clean
+  dim(high_variance)
+}
+
+```
+
+We went from 77 to 56 columns now. There were 21 columns with near-zero or zero variance with a threshold of 0.01.
+
+Now that we have completed our EDA process, our data is prepared for more complex models. 
+
+## Results
+
+Throughout our EDA process we learned a lot. We learned that the majority class classifier would be 91.9%. That is our benchmark to improve upon with more complex models. We learned that income does not appear to have a strong impact on default, but education appears to when the client had an academic degree. When diving into the missing data in our dataset, we learned that over 40 columns were missing 40% or more of their data. The columns were removed as they would not be good variables to work with moving forward. For the remaining columns, we inputted the average value for the entire column so that those columns would still be usable in our further analysis. Finally, we removed 21 columns that had near-zero or zero variance in their values set at a threshold of 0.01. Moving forward with more complex analysis we will want to:
+
+- Explore the relationship between education and default further.
+- Perform the same analysis on the test dataset before evaluating models.
+- Explore new relationships through modeling between default and variables.
+
+This EDA has influenced my thinking on the analytics approach by starting with a broad test of correlation. A decision tree may be the first test to see which other variables outside of education may play a role. Once initial variables of significance have been established then the next step is to prepare more complex models.
+
+
