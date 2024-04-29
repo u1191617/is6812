@@ -1,4 +1,4 @@
-**Business Problem:**
+**Business Problem:**\
 Many people struggle to get loans due to poor or non-existent credit histories. Unfortunately, in search of loans, this population is often taken advantage of by untrustworthy lenders. Home Credit aims to help the unbanked population by providing a better borrowing experience. In order to make sure this population has a positive loan experience, Home Credit makes use of a variety of data to predict their clients' ability to repay.
 
 **Project Objective:**
